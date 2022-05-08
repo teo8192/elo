@@ -3,7 +3,7 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Player {
     name: String,
     rating: usize,
@@ -44,40 +44,83 @@ impl Ord for Player {
     }
 }
 
-#[derive(Debug)]
-pub struct Elo {
-    players: HashMap<String, Player>,
-    starting_elo: usize,
+pub trait EloStorage<'a, I>
+where
+    I: Iterator<Item = &'a Player>,
+{
+    fn add_player(&mut self, player: Player);
+    fn update_player(&mut self, player: &Player);
+    fn get(&self, name: &str) -> Option<&Player>;
+    fn get_mut(&mut self, name: &str) -> Option<&mut Player>;
+    fn iter(&'a self) -> I;
 }
 
-impl Elo {
-    pub fn new() -> Elo {
+struct HashMapIter<'a, K, V> {
+    iter: Iter<'a, K, V>,
+}
+
+impl<'a, K, V> Iterator for HashMapIter<'a, K, V> {
+    type Item = &'a V;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|(_, v)| v)
+    }
+}
+
+impl<'a> EloStorage<'a, HashMapIter<'a, String, Player>> for HashMap<String, Player> {
+    fn add_player(&mut self, player: Player) {
+        self.insert(player.name.clone(), player);
+    }
+
+    fn update_player(&mut self, player: &Player) {
+        self.insert(player.name().to_string(), player.clone());
+    }
+
+    fn get(&self, name: &str) -> Option<&Player> {
+        self.get(name)
+    }
+
+    fn get_mut(&mut self, name: &str) -> Option<&mut Player> {
+        self.get_mut(name)
+    }
+
+    fn iter(&'a self) -> HashMapIter<'a, String, Player> {
+        HashMapIter { iter: self.iter() }
+    }
+}
+
+#[derive(Debug)]
+pub struct Elo<'a, I: Iterator<Item = &'a Player>, S: EloStorage<'a, I>> {
+    players: S,
+    starting_elo: usize,
+    _marker: std::marker::PhantomData<I>,
+}
+
+impl<'a, I: Iterator<Item = &'a Player>, S: EloStorage<'a, I>> Elo<'a, I, S> {
+    pub fn new(players: S) -> Elo<'a, I, S> {
         Elo {
-            players: HashMap::new(),
+            players,
             starting_elo: 1000,
+            _marker: std::marker::PhantomData,
         }
     }
 
-    pub fn add_player<S: ToString>(&mut self, name: S) {
-        self.players.insert(
-            name.to_string(),
-            Player {
-                name: name.to_string(),
-                rating: self.starting_elo,
-                numer_of_games: 0,
-            },
-        );
+    pub fn add_player<TS: ToString>(&mut self, name: TS) {
+        self.players.add_player(Player {
+            name: name.to_string(),
+            rating: self.starting_elo,
+            numer_of_games: 0,
+        });
     }
 
     pub fn try_add(&mut self, name: &str) {
-        if !self.players.contains_key(name) {
+        if self.players.get(name).is_none() {
             self.add_player(name);
         }
     }
 
     /// If is_draw is true, the game is a draw.
     /// If is_draw is false, the game is won by the first player.
-    pub fn add_win(&mut self, player1: &str, player2: &str, is_draw: bool) -> Result<(), String> {
+    pub fn add_game(&mut self, player1: &str, player2: &str, is_draw: bool) -> Result<(), String> {
         if player1 == player2 {
             return Err(format!(
                 "{} can't play against themselves (you friendless loser)",
@@ -87,19 +130,15 @@ impl Elo {
 
         self.try_add(player1);
         self.try_add(player2);
-        let w = &self.players[player1];
-        let l = &self.players[player2];
+        let w = &self[player1];
+        let l = &self[player2];
 
         let winner_expected =
             1.0 / (1.0 + 10.0_f64.powf((l.rating as isize - w.rating as isize) as f64 / 400.0));
         let loser_expected =
             1.0 / (1.0 + 10.0_f64.powf((w.rating as isize - l.rating as isize) as f64 / 400.0));
 
-        let factor = if is_draw {
-            0.5
-        } else {
-            0.0
-        };
+        let factor = if is_draw { 0.5 } else { 0.0 };
 
         let winner_new_rating = w.rating() as f64 + 32.0 * (1.0 - factor - winner_expected);
         let loser_new_rating = l.rating() as f64 + 32.0 * (factor - loser_expected);
@@ -121,13 +160,7 @@ impl Elo {
     }
 }
 
-impl Default for Elo {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Index<&str> for Elo {
+impl<'a, I: Iterator<Item = &'a Player>, S: EloStorage<'a, I>> Index<&str> for Elo<'a, I, S> {
     type Output = Player;
 
     fn index(&self, name: &str) -> &Player {
@@ -135,32 +168,18 @@ impl Index<&str> for Elo {
     }
 }
 
-impl IndexMut<&str> for Elo {
+impl<'a, I: Iterator<Item = &'a Player>, S: EloStorage<'a, I>> IndexMut<&str> for Elo<'a, I, S> {
     fn index_mut(&mut self, name: &str) -> &mut Player {
         self.players.get_mut(name).unwrap()
     }
 }
 
-impl<'a> IntoIterator for &'a Elo {
+impl<'a, I: Iterator<Item = &'a Player>, S: EloStorage<'a, I>> IntoIterator for &'a Elo<'a, I, S> {
     type Item = &'a Player;
-    type IntoIter = EloIter<'a>;
+    type IntoIter = I;
 
     fn into_iter(self) -> Self::IntoIter {
-        EloIter {
-            elo: self.players.iter(),
-        }
-    }
-}
-
-pub struct EloIter<'a> {
-    elo: Iter<'a, String, Player>,
-}
-
-impl<'a> Iterator for EloIter<'a> {
-    type Item = &'a Player;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.elo.next().map(|(_, player)| player)
+        self.players.iter()
     }
 }
 
@@ -170,20 +189,20 @@ mod tests {
 
     #[test]
     fn single_no_friends() {
-        let mut elo = Elo::new();
+        let mut elo = Elo::new(HashMap::new());
         elo.add_player("a");
 
-        assert!(elo.add_win("a", "a", false).is_err());
+        assert!(elo.add_game("a", "a", false).is_err());
     }
 
     #[test]
     fn dual() {
-        let mut elo = Elo::new();
+        let mut elo = Elo::new(HashMap::new());
         elo.add_player("a");
         elo.add_player("b");
 
-        elo.add_win("a", "b", false).unwrap();
-        elo.add_win("b", "a", false).unwrap();
+        elo.add_game("a", "b", false).unwrap();
+        elo.add_game("b", "a", false).unwrap();
 
         assert_eq!(elo["a"].rating(), 999);
         assert_eq!(elo["b"].rating(), 1001);
@@ -194,11 +213,11 @@ mod tests {
 
     #[test]
     fn dual_draw() {
-        let mut elo = Elo::new();
+        let mut elo = Elo::new(HashMap::new());
         elo.add_player("a");
         elo.add_player("b");
 
-        elo.add_win("a", "b", true).unwrap();
+        elo.add_game("a", "b", true).unwrap();
 
         assert_eq!(elo["a"].rating(), 1000);
         assert_eq!(elo["b"].rating(), 1000);
@@ -206,15 +225,15 @@ mod tests {
 
     #[test]
     fn ordering() {
-        let mut elo = Elo::new();
+        let mut elo = Elo::new(HashMap::new());
         elo.add_player("a");
         elo.add_player("b");
         elo.add_player("c");
         elo.add_player("d");
 
-        elo.add_win("a", "b", false).unwrap();
-        elo.add_win("a", "b", false).unwrap();
-        elo.add_win("a", "c", false).unwrap();
+        elo.add_game("a", "b", false).unwrap();
+        elo.add_game("a", "b", false).unwrap();
+        elo.add_game("a", "c", false).unwrap();
 
         // force b rating, to see ordering with comparison of c
         elo["b"].rating = 985;
