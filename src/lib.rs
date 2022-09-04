@@ -59,7 +59,10 @@ pub fn update_rating(w: &Player, l: &Player, is_draw: bool) -> (usize, usize) {
     let winner_new_rating = w.rating() as f64 + 32.0 * (1.0 - factor - winner_expected);
     let loser_new_rating = l.rating() as f64 + 32.0 * (factor - loser_expected);
 
-    (winner_new_rating.round() as usize, loser_new_rating.round() as usize)
+    (
+        winner_new_rating.round() as usize,
+        loser_new_rating.round() as usize,
+    )
 }
 
 impl Ord for Player {
