@@ -7,10 +7,18 @@ use std::{
 pub struct Player {
     name: String,
     rating: usize,
-    numer_of_games: usize,
+    number_of_games: usize,
 }
 
 impl Player {
+    pub fn new(name: String, rating: usize, number_of_games: usize) -> Self {
+        Self {
+            name,
+            rating,
+            number_of_games,
+        }
+    }
+
     pub fn rating(&self) -> usize {
         self.rating
     }
@@ -20,7 +28,7 @@ impl Player {
     }
 
     pub fn numer_of_games(&self) -> usize {
-        self.numer_of_games
+        self.number_of_games
     }
 }
 
@@ -28,7 +36,7 @@ impl PartialOrd for Player {
     fn partial_cmp(&self, other: &Player) -> Option<std::cmp::Ordering> {
         Some(match self.rating.cmp(&other.rating).reverse() {
             std::cmp::Ordering::Equal => {
-                match self.numer_of_games.cmp(&other.numer_of_games).reverse() {
+                match self.number_of_games.cmp(&other.number_of_games).reverse() {
                     std::cmp::Ordering::Equal => self.name.cmp(&other.name),
                     ord => ord,
                 }
@@ -108,7 +116,7 @@ impl<'a, I: Iterator<Item = &'a Player>, S: EloStorage<'a, I>> Elo<'a, I, S> {
         self.players.add_player(Player {
             name: name.to_string(),
             rating: self.starting_elo,
-            numer_of_games: 0,
+            number_of_games: 0,
         });
     }
 
@@ -146,7 +154,7 @@ impl<'a, I: Iterator<Item = &'a Player>, S: EloStorage<'a, I>> Elo<'a, I, S> {
         let mut update_rating = |player, new_rating: f64| {
             let p = self.players.get_mut(player).unwrap();
             p.rating = new_rating.round() as usize;
-            p.numer_of_games += 1;
+            p.number_of_games += 1;
         };
 
         update_rating(player1, winner_new_rating);
@@ -240,7 +248,7 @@ mod tests {
 
         // add player d, see check that name is ordered lexicographically
         elo["d"].rating = 985;
-        elo["d"].numer_of_games = 2;
+        elo["d"].number_of_games = 2;
 
         let mut players = elo.into_iter().collect::<Vec<_>>();
         players.sort();
