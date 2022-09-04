@@ -63,7 +63,7 @@ where
     fn iter(&'a self) -> I;
 }
 
-struct HashMapIter<'a, K, V> {
+pub struct HashMapIter<'a, K, V> {
     iter: Iter<'a, K, V>,
 }
 
