@@ -1,3 +1,6 @@
+#[cfg(feature = "async")]
+mod async_elo;
+
 mod elo;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
