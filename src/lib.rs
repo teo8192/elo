@@ -3,6 +3,11 @@ mod async_elo;
 
 mod elo;
 
+pub use elo::{Elo, EloStorage};
+
+#[cfg(feature = "async")]
+pub use async_elo::{AsyncElo, AsyncEloStorage};
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Player {
     name: String,
