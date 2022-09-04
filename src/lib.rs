@@ -27,7 +27,7 @@ impl Player {
         &self.name
     }
 
-    pub fn numer_of_games(&self) -> usize {
+    pub fn number_of_games(&self) -> usize {
         self.number_of_games
     }
 }
@@ -215,8 +215,8 @@ mod tests {
         assert_eq!(elo["a"].rating(), 999);
         assert_eq!(elo["b"].rating(), 1001);
 
-        assert_eq!(elo["a"].numer_of_games(), 2);
-        assert_eq!(elo["b"].numer_of_games(), 2);
+        assert_eq!(elo["a"].number_of_games(), 2);
+        assert_eq!(elo["b"].number_of_games(), 2);
     }
 
     #[test]
